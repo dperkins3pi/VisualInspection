@@ -1,0 +1,4 @@
+{
+    "python.pythonPath": "/home/ecenstudent/.virtualenvs/compvision/bin/python",
+    "python.linting.pylintArgs": ["--extension-pkg-whitelist=cv2"]
+}
