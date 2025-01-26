@@ -12,7 +12,10 @@ Set CATCHER to 1 to use the catcher connected to the lab machine or 0 to use you
 '''
 WEBCAM = 1
 CATCHER = 0
-VIDEO_PATH = 'Good1_Cleaned.mp4'    # TODO: Make None when doing it live
+PRODUCT = 'Ugly'
+VIDEO_PATH = 'videos/' + PRODUCT + '_Cleaned.mp4'    # TODO: Make it None when doing it live
+OUTPUT_DIR = 'contours/' + PRODUCT
+SAVE_IMAGES = False   # Make true if you want to save the images
 
 if VIDEO_PATH is not None:
     camera = cv.VideoCapture(VIDEO_PATH)
@@ -30,6 +33,7 @@ if not camera.isOpened():
 width = int(camera.get(cv.CAP_PROP_FRAME_WIDTH))
 height = int(camera.get(cv.CAP_PROP_FRAME_HEIGHT))
 videout = cv.VideoWriter('./Video1.avi', cv.VideoWriter_fourcc(*'XVID'), 25, (width, height))  # Video format
+frame_count = 1
 
 while True:
     # Get Opencv Frame
@@ -75,6 +79,22 @@ while True:
                 break
         if keep:
             merged_contours.append((contour1, area1, x1, y1, w1, h1))
+            
+    # Extract and save crops
+    if VIDEO_PATH is not None and SAVE_IMAGES:
+        for idx, (contour, area, x, y, w, h) in enumerate(valid_contours):
+            # Crop the region
+            crop = frame[y:y + h, x:x + w]
+
+            # Resize to a fixed size (e.g., 128x128)
+            crop_resized = cv.resize(crop, (128, 128))
+
+            # Normalize the pixel values (e.g., scale to [0, 1])
+            crop_normalized = crop_resized / 255.0
+
+            # Save the crop for later use
+            filename = f"{OUTPUT_DIR}/frame{frame_count}_object{idx}.png"
+            cv.imwrite(filename, (crop_normalized * 255).astype(np.uint8))  # Save as an image
                 
     # Iterate through contours to draw bounding boxes for large objects
     for contour, area, x, y, w, h in merged_contours:
@@ -86,7 +106,9 @@ while True:
     if cv.waitKey(25) & 0xFF == ord('q'):
         break
 
-    videout.write(frame)    
+    videout.write(frame)   
+    
+    frame_count += 1
 
 camera.release()
     
