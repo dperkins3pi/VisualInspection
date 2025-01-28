@@ -207,7 +207,6 @@ def shuffle_and_split(good_features, good_files, bad_features, bad_files, ugly_f
     file_names = np.concatenate([good_files, bad_files, ugly_files])
     labels = np.concatenate([[GOOD]*len(good_features), [BAD]*len(bad_features), [UGLY]*len(ugly_features)])
     
-    print(len(features))
     np.random.seed(random_seed)   # Set the random seed for reproducibility
 
     # Shuffle the indices
