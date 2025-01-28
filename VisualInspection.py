@@ -6,6 +6,7 @@ ECEn-631 Visual Inspection Project created by Harrison Garrett in 2020
 import cv2 as cv
 import numpy as np
 import os
+from sklearn.svm import LinearSVC
 '''
 Set WEBCAM to 1 to use your webcam or 0 to use the Flea2 cameras on the lab machine
 Set CATCHER to 1 to use the catcher connected to the lab machine or 0 to use your own computer
@@ -15,7 +16,15 @@ CATCHER = 0
 PRODUCT = 'Ugly'
 VIDEO_PATH = 'videos/' + PRODUCT + '_Cleaned.mp4'    # TODO: Make it None when doing it live
 OUTPUT_DIR = 'contours/' + PRODUCT
+WEIGHTS_PATH = 'svc_model.npz'
 SAVE_IMAGES = False   # Make true if you want to save the images
+
+
+# Initialize a new LinearSVC model and assign it the weights and intercept
+loaded_data = np.load(WEIGHTS_PATH)
+clf = LinearSVC(random_state=0, tol=1e-5)
+clf.coef_ = loaded_data['coef']
+clf.intercept_ = loaded_data['intercept']
 
 if VIDEO_PATH is not None:
     camera = cv.VideoCapture(VIDEO_PATH)
