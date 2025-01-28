@@ -201,58 +201,99 @@ def calculate_edge_intensity(image):
     edge_intensity = np.sum(edges) / (image.shape[0] * image.shape[1])
     return edge_intensity
 
-def get_features(good_images, bad_images, ugly_images):
+def calculate_fourier_descriptors(image, num_coefficients=10):
+    """Calculate the Fourier Descriptors of an object's contour in the image.
+    
+    Args:
+        image (numpy.ndarray): The input image in BGR or grayscale format.
+        num_coefficients (int): The number of Fourier coefficients to use.
+        
+    Returns:
+        np.ndarray: A feature vector containing the Fourier Descriptors.
+    """
+    # Convert the image to grayscale if it's not already
+    gray_image = cv.cvtColor(image, cv.COLOR_BGR2GRAY) if len(image.shape) == 3 else image
+    
+    # Threshold to get the binary object
+    _, binary_image = cv.threshold(gray_image, 127, 255, cv.THRESH_BINARY)
+    
+    # Find contours
+    contours, _ = cv.findContours(binary_image, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
+    
+    # Assume the largest contour is the object of interest
+    try: contour = max(contours, key=cv.contourArea)
+    except: return np.zeros(num_coefficients)
+    
+    # Convert the contour points to complex numbers (x + iy)
+    contour_complex = np.array([complex(pt[0][0], pt[0][1]) for pt in contour], dtype=complex)
+    
+    # Perform the Fourier Transform
+    fourier_coefficients = np.fft.fft(contour_complex)
+    
+    # Keep the first 'num_coefficients' coefficients (including the zero frequency term)
+    fourier_coefficients = fourier_coefficients[:num_coefficients]
+    
+    # Normalize the descriptors to avoid scale issues
+    fourier_coefficients = np.abs(fourier_coefficients)  # Magnitude of Fourier coefficients
+    fourier_coefficients /= np.linalg.norm(fourier_coefficients, ord=1)  # Normalize
+    
+    if len(fourier_coefficients) != num_coefficients:
+        while len(fourier_coefficients) < 10: 
+            fourier_coefficients = np.concatenate([fourier_coefficients, [0]])
+        
+    return fourier_coefficients
+
+def get_features(img):
+    hsv_image = cv.cvtColor(img, cv.COLOR_BGR2HSV)  # Convert to HSV
+    hsv_image = cv.cvtColor(img, cv.COLOR_BGR2HSV)  # Convert to HSV
+    
+    # Color features
+    red_proportion = calculate_red_proportion(hsv_image)
+    white_proportion = calculate_white_proportion(hsv_image)
+    green_proportion = calculate_green_proportion(hsv_image)
+    yellow_proportion = calculate_yellow_proportion(hsv_image)
+    black_proportion = calculate_black_gray_proportion(hsv_image)
+    
+    # Shape & Edge features
+    area, perimeter = calculate_area_perimeter(img)
+    circularity = calculate_circularity(area, perimeter)
+    edge_intensity = calculate_edge_intensity(img)
+    
+    # Texture features (LBP)
+    lbp_features = compute_lbp(hsv_image[:, :, 2])
+    fourier_coefficients = calculate_fourier_descriptors(img)
+
+    # Combine all features
+    color_features = [red_proportion, white_proportion, green_proportion, yellow_proportion, black_proportion]
+    shape_features = [area, perimeter, circularity, edge_intensity]
+    features = np.concatenate((color_features, lbp_features, shape_features, fourier_coefficients), axis=0)
+
+    # Print features
+    # print(f"Image {i+1}:")
+    # print(f"  Red Proportion: {red_proportion:.2%}, White Proportion: {white_proportion:.2%}")
+    # print(f"  Green Proportion: {green_proportion:.2%}, Yellow Proportion: {yellow_proportion:.2%}")
+    # print(f"  Black Proportion: {black_proportion:.2%}")
+    # print(f"  Area: {area:.2f}, Perimeter: {perimeter:.2f}")
+    # print(f"  Circularity: {circularity:.2f}, Edge Intensity: {edge_intensity:.2f}")
+    
+    return features
+
+def get_all_features(good_images, bad_images, ugly_images):
     all_images = [good_images, bad_images, ugly_images]
     all_features = []
-
 
     for j, images in enumerate(all_images):
         image_features = []
 
-
         for i, img in enumerate(images):
-            hsv_image = cv.cvtColor(img, cv.COLOR_BGR2HSV)  # Convert to HSV
-            hsv_image = cv.cvtColor(img, cv.COLOR_BGR2HSV)  # Convert to HSV
-            
-            # Color features
-            red_proportion = calculate_red_proportion(hsv_image)
-            white_proportion = calculate_white_proportion(hsv_image)
-            green_proportion = calculate_green_proportion(hsv_image)
-            yellow_proportion = calculate_yellow_proportion(hsv_image)
-            black_proportion = calculate_black_gray_proportion(hsv_image)
-            
-            # Shape & Edge features
-            area, perimeter = calculate_area_perimeter(img)
-            circularity = calculate_circularity(area, perimeter)
-            edge_intensity = calculate_edge_intensity(img)
-            
-            # Texture features (LBP)
-            lbp_features = compute_lbp(hsv_image[:, :, 2])
-
-            # Combine all features
-            color_features = [red_proportion, white_proportion, green_proportion, yellow_proportion, black_proportion]
-            shape_features = [area, perimeter, circularity, edge_intensity]
-            features = np.concatenate((color_features, lbp_features, shape_features), axis=0)
-
+            features = get_features(img)
             image_features.append(features)
-
-            # Print features
-            # print(f"Image {i+1}:")
-            # print(f"  Red Proportion: {red_proportion:.2%}, White Proportion: {white_proportion:.2%}")
-            # print(f"  Green Proportion: {green_proportion:.2%}, Yellow Proportion: {yellow_proportion:.2%}")
-            # print(f"  Black Proportion: {black_proportion:.2%}")
-            # print(f"  Area: {area:.2f}, Perimeter: {perimeter:.2f}")
-            # print(f"  Circularity: {circularity:.2f}, Edge Intensity: {edge_intensity:.2f}")
 
         image_features = np.array(image_features)
         all_features.append(image_features)
         print("Finished loading dataset", j+1)
 
-        print("Finished loading dataset", j+1)
-
     return all_features
-
-
 
 def shuffle_and_split(good_features, good_files, bad_features, bad_files, ugly_features, ugly_files, test_size=0.2, random_seed=42):
     """
@@ -342,23 +383,28 @@ def vis_conf_mat(conf_mat, cat_names, acc):
     _filename = 'conf_mat.png'
     plt.savefig(_filename, bbox_inches='tight')
 
+
 # Load in the images
 good_images, good_files = load_images_from_folder("contours/Good1_Slow")
 bad_images, bad_files = load_images_from_folder("contours/Bad_Slow")
 ugly_images, ugly_files = load_images_from_folder("contours/Ugly_Slow")
 
 # Get the features
-all_features = get_features(good_images, bad_images, ugly_images)
+all_features = get_all_features(good_images, bad_images, ugly_images)
 good_features, bad_features, ugly_features = all_features
 
 # Split into training and test set
 train_data, test_data, train_labels, test_labels, train_files, test_files = \
     shuffle_and_split(good_features, good_files, bad_features, bad_files, ugly_features, ugly_files)
     
-    
 clf = LinearSVC(random_state=0, tol=1e-5)
 clf.fit(train_data, train_labels)            # fit SVM using training data
 prediction = clf.predict(test_data)          # make prediction on the test data
+
+# Save weights to a .npy file (using numpy)
+weights = clf.coef_
+intercept = clf.intercept_
+np.savez('svc_model.npz', coef=weights, intercept=intercept)
 
 # visualization
 cmat = get_conf_mat(y_pred=prediction, y_target=test_labels, n_cats=3)
