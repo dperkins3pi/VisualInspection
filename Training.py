@@ -1,7 +1,10 @@
 import cv2 as cv
 import numpy as np
 import os
+import matplotlib.pyplot as plt 
 from skimage.feature import local_binary_pattern
+from sklearn.svm import LinearSVC
+from matplotlib import cm
 
 GOOD = 0
 BAD = 1
@@ -154,14 +157,37 @@ def compute_lbp(arr):
     feature /= np.linalg.norm(feature, ord=1)
     return feature
 
+def calculate_area_perimeter(image):
+    gray_image = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
+    _, thresholded = cv.threshold(gray_image, 127, 255, cv.THRESH_BINARY)
+    contours, _ = cv.findContours(thresholded, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
+    area = 0
+    perimeter = 0
+    for contour in contours:
+        area += cv.contourArea(contour)
+        perimeter += cv.arcLength(contour, True)
+    return area, perimeter
+
+def calculate_circularity(area, perimeter):
+    if perimeter == 0:
+        return 0
+    return 4 * np.pi * area / (perimeter ** 2)
+
+def calculate_edge_intensity(image):
+    gray_image = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
+    edges = cv.Canny(gray_image, 100, 200)
+    edge_intensity = np.sum(edges) / (image.shape[0] * image.shape[1])
+    return edge_intensity
+
 def get_features(good_images, bad_images, ugly_images):
     all_images = [good_images, bad_images, ugly_images]
     all_features = []
+
     for j, images in enumerate(all_images):
         image_features = []
+
         for i, img in enumerate(images):
-            # Combine masks for both red ranges
-            hsv_image = cv.cvtColor(img, cv.COLOR_BGR2HSV)  # Convert BGR image to HSV color space
+            hsv_image = cv.cvtColor(img, cv.COLOR_BGR2HSV)  # Convert to HSV
             
             # Color features
             red_proportion = calculate_red_proportion(hsv_image)
@@ -170,22 +196,33 @@ def get_features(good_images, bad_images, ugly_images):
             yellow_proportion = calculate_yellow_proportion(hsv_image)
             black_proportion = calculate_black_gray_proportion(hsv_image)
             
-            # Non-color features
-            lbp_features = compute_lbp(hsv_image[:, :, 2])
+            # Shape & Edge features
+            area, perimeter = calculate_area_perimeter(img)
+            circularity = calculate_circularity(area, perimeter)
+            edge_intensity = calculate_edge_intensity(img)
             
-            # Store it
+            # Texture features (LBP)
+            lbp_features = compute_lbp(hsv_image[:, :, 2])
+
+            # Combine all features
             color_features = [red_proportion, white_proportion, green_proportion, yellow_proportion, black_proportion]
-            features = np.concatenate((color_features, lbp_features), axis=0)
+            shape_features = [area, perimeter, circularity, edge_intensity]
+            features = np.concatenate((color_features, lbp_features, shape_features), axis=0)
+
             image_features.append(features)
-            # Print out
-            # print(f"Image {i+1}: Red proportion = {red_proportion:.2%}, White proportion = {white_proportion:.2%}, Green proportion = {green_proportion:.2%}, Yellow proportion = {yellow_proportion:.2%}, Black proportion = {black_proportion:.2%}")
-            # print(f"lbp features: {lbp_features}")
+
+            # Print features
+            # print(f"Image {i+1}:")
+            # print(f"  Red Proportion: {red_proportion:.2%}, White Proportion: {white_proportion:.2%}")
+            # print(f"  Green Proportion: {green_proportion:.2%}, Yellow Proportion: {yellow_proportion:.2%}")
+            # print(f"  Black Proportion: {black_proportion:.2%}")
+            # print(f"  Area: {area:.2f}, Perimeter: {perimeter:.2f}")
+            # print(f"  Circularity: {circularity:.2f}, Edge Intensity: {edge_intensity:.2f}")
 
         image_features = np.array(image_features)
         all_features.append(image_features)
-        
-        print("Finished loading in for dataset", j+1)
-    
+        print("Finished loading dataset", j+1)
+
     return all_features
 
 
@@ -228,6 +265,55 @@ def shuffle_and_split(good_features, good_files, bad_features, bad_files, ugly_f
     
     return X_train, X_test, train_labels, test_labels, train_files, test_files
 
+def get_conf_mat(y_pred, y_target, n_cats):
+    """Build confusion matrix from scratch.
+    (This part could be a good student assignment.)
+    """
+    conf_mat = np.zeros((n_cats, n_cats))
+    n_samples = y_target.shape[0]
+    for i in range(n_samples):
+        _t = y_target[i]
+        _p = y_pred[i]
+        conf_mat[_t, _p] += 1
+    norm = np.sum(conf_mat, axis=1, keepdims=True)
+    return conf_mat / norm
+
+def vis_conf_mat(conf_mat, cat_names, acc):
+    """Visualize the confusion matrix and save the figure to disk."""
+    n_cats = conf_mat.shape[0]
+
+    fig, ax = plt.subplots()
+    # figsize=(10, 10)
+
+    cmap = cm.Blues
+    im = ax.matshow(conf_mat, cmap=cmap)
+    im.set_clim(0, 1)
+    ax.set_xlim(-0.5, n_cats - 0.5)
+    ax.set_ylim(-0.5, n_cats - 0.5)
+    ax.set_xticks(np.arange(n_cats))
+    ax.set_yticks(np.arange(n_cats))
+    ax.set_xticklabels(cat_names)
+    ax.set_yticklabels(cat_names)
+    ax.tick_params(top=False, bottom=True, labeltop=False, labelbottom=True)
+    plt.setp(ax.get_xticklabels(), rotation=45,
+            ha="right", rotation_mode="anchor")
+
+    for i in range(n_cats):
+        for j in range(n_cats):
+            text = ax.text(j, i, round(
+                conf_mat[i, j], 2), ha="center", va="center", color="w")
+
+    cbar = fig.colorbar(im)
+
+    ax.set_xlabel('Predicted label')
+    ax.set_ylabel('True label')
+    _title = 'Normalized confusion matrix, acc={0:.2f}'.format(acc)
+    ax.set_title(_title)
+
+    # plt.show()
+    _filename = 'conf_mat.png'
+    plt.savefig(_filename, bbox_inches='tight')
+
 # Load in the images
 good_images, good_files = load_images_from_folder("contours/Good1_Slow")
 bad_images, bad_files = load_images_from_folder("contours/Bad_Slow")
@@ -240,7 +326,17 @@ good_features, bad_features, ugly_features = all_features
 # Split into training and test set
 train_data, test_data, train_labels, test_labels, train_files, test_files = \
     shuffle_and_split(good_features, good_files, bad_features, bad_files, ugly_features, ugly_files)
+    
+    
+clf = LinearSVC(random_state=0, tol=1e-5)
+clf.fit(train_data, train_labels)            # fit SVM using training data
+prediction = clf.predict(test_data)          # make prediction on the test data
 
-cv.imshow("Sample Image", ugly_images[-1])  # Display the last image
-cv.waitKey(0)  # Wait for a key press to close the window
-cv.destroyAllWindows()
+# visualization
+cmat = get_conf_mat(y_pred=prediction, y_target=test_labels, n_cats=3)
+acc = cmat.trace() / cmat.shape[0]
+vis_conf_mat(cmat, ["Good", "Bad", "Ugly"], acc)
+
+# cv.imshow("Sample Image", ugly_images[-1])  # Display the last image
+# cv.waitKey(0)  # Wait for a key press to close the window
+# cv.destroyAllWindows()
