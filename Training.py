@@ -88,7 +88,7 @@ def calculate_yellow_proportion(image, lower_yellow=(20, 100, 100), upper_yellow
     Calculates the proportion of yellow pixels in an image.
     
     Args:
-        image (numpy.ndarray): The input image in BGR format.
+        image (numpy.ndarray): The input image in HSV color space
         lower_yellow (tuple): Lower bound for yellow in HSV.
         upper_yellow (tuple): Upper bound for yellow in HSV.
             In HSV (Yellow typically spans around 20°-40° H):
@@ -102,6 +102,34 @@ def calculate_yellow_proportion(image, lower_yellow=(20, 100, 100), upper_yellow
     total_pixels = image.shape[0] * image.shape[1]  # Calculate the total number of pixels in the image
     yellow_proportion = yellow_pixel_count / total_pixels  # Calculate the proportion of yellow pixels
     return yellow_proportion
+
+def calculate_black_gray_proportion(image, lower_gray=(0, 0, 50), upper_gray=(180, 50, 150), lower_black=(0, 0, 0), upper_black=(180, 255, 50)):
+    """
+    Calculates the proportion of black or gray pixels in an image.
+    
+    Args:
+        image (numpy.ndarray): The input image in HSV color space
+        lower_gray (tuple): Lower bound for gray in HSV.
+        upper_gray (tuple): Upper bound for gray in HSV.
+        lower_black (tuple): Lower bound for black in HSV.
+        upper_black (tuple): Upper bound for black in HSV.
+            In HSV:
+                - Black pixels typically have very low Value (V close to 0).
+                - Gray pixels have low Saturation (S) and middle-to-low Value (V).
+    
+    Returns:
+        float: The proportion of black and gray pixels in the image.
+    """
+    gray_mask = cv.inRange(image, lower_gray, upper_gray)  # Create a binary mask for gray pixels
+    black_mask = cv.inRange(hsv_image, lower_black, upper_black)  # Create a binary mask for black pixels
+    
+    gray_pixel_count = cv.countNonZero(gray_mask)  # Calculate the number of gray pixels
+    black_pixel_count = cv.countNonZero(black_mask)  # Calculate the number of black pixels
+    
+    total_pixels = image.shape[0] * image.shape[1]  # Calculate the total number of pixels in the image
+    black_gray_proportion = (gray_pixel_count + black_pixel_count) / total_pixels  # Calculate the proportion of black and gray pixels
+    return black_gray_proportion
+
 
 
 
@@ -118,15 +146,17 @@ print(type(good_images[0]))
 print(calculate_red_proportion(good_images[0]))
 
 # Process each image
-for i, img in enumerate(bad_images):
+for i, img in enumerate(good_images):
     # Combine masks for both red ranges
     hsv_image = cv.cvtColor(img, cv.COLOR_BGR2HSV)  # Convert BGR image to HSV color space
     red_proportion = calculate_red_proportion(hsv_image)
     white_proportion = calculate_white_proportion(hsv_image)
     green_proportion = calculate_green_proportion(hsv_image)
-    print(f"Image {i+1}: Red proportion = {red_proportion:.2%}, White proportion = {white_proportion:.2%}, Green proportion = {green_proportion:.2%}")
+    yellow_proportion = calculate_yellow_proportion(hsv_image)
+    black_proportion = calculate_black_gray_proportion(hsv_image)
+    print(f"Image {i+1}: Red proportion = {red_proportion:.2%}, White proportion = {white_proportion:.2%}, Green proportion = {green_proportion:.2%}, Yellow proportion = {yellow_proportion:.2%}, Black proportion = {black_proportion:.2%}")
 
 
-cv.imshow("Sample Image", good_images[0])  # Display the first image
+cv.imshow("Sample Image", good_images[-1])  # Display the first image
 cv.waitKey(0)  # Wait for a key press to close the window
 cv.destroyAllWindows()
