@@ -179,14 +179,39 @@ def calculate_edge_intensity(image):
     edge_intensity = np.sum(edges) / (image.shape[0] * image.shape[1])
     return edge_intensity
 
+def calculate_area_perimeter(image):
+    gray_image = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
+    _, thresholded = cv.threshold(gray_image, 127, 255, cv.THRESH_BINARY)
+    contours, _ = cv.findContours(thresholded, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
+    area = 0
+    perimeter = 0
+    for contour in contours:
+        area += cv.contourArea(contour)
+        perimeter += cv.arcLength(contour, True)
+    return area, perimeter
+
+def calculate_circularity(area, perimeter):
+    if perimeter == 0:
+        return 0
+    return 4 * np.pi * area / (perimeter ** 2)
+
+def calculate_edge_intensity(image):
+    gray_image = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
+    edges = cv.Canny(gray_image, 100, 200)
+    edge_intensity = np.sum(edges) / (image.shape[0] * image.shape[1])
+    return edge_intensity
+
 def get_features(good_images, bad_images, ugly_images):
     all_images = [good_images, bad_images, ugly_images]
     all_features = []
 
+
     for j, images in enumerate(all_images):
         image_features = []
 
+
         for i, img in enumerate(images):
+            hsv_image = cv.cvtColor(img, cv.COLOR_BGR2HSV)  # Convert to HSV
             hsv_image = cv.cvtColor(img, cv.COLOR_BGR2HSV)  # Convert to HSV
             
             # Color features
@@ -223,7 +248,10 @@ def get_features(good_images, bad_images, ugly_images):
         all_features.append(image_features)
         print("Finished loading dataset", j+1)
 
+        print("Finished loading dataset", j+1)
+
     return all_features
+
 
 
 def shuffle_and_split(good_features, good_files, bad_features, bad_files, ugly_features, ugly_files, test_size=0.2, random_seed=42):
