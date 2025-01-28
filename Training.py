@@ -368,3 +368,83 @@ vis_conf_mat(cmat, ["Good", "Bad", "Ugly"], acc)
 # cv.imshow("Sample Image", ugly_images[-1])  # Display the last image
 # cv.waitKey(0)  # Wait for a key press to close the window
 # cv.destroyAllWindows()
+
+
+def calculate_fourier_descriptors(image, num_coefficients=10):
+    """Calculate the Fourier Descriptors of an object's contour in the image.
+    
+    Args:
+        image (numpy.ndarray): The input image in BGR or grayscale format.
+        num_coefficients (int): The number of Fourier coefficients to use.
+        
+    Returns:
+        np.ndarray: A feature vector containing the Fourier Descriptors.
+    """
+    # Convert the image to grayscale if it's not already
+    gray_image = cv.cvtColor(image, cv.COLOR_BGR2GRAY) if len(image.shape) == 3 else image
+    
+    # Threshold to get the binary object
+    _, binary_image = cv.threshold(gray_image, 127, 255, cv.THRESH_BINARY)
+    
+    # Find contours
+    contours, _ = cv.findContours(binary_image, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
+    
+    # Assume the largest contour is the object of interest
+    contour = max(contours, key=cv.contourArea)
+    
+    # Convert the contour points to complex numbers (x + iy)
+    contour_complex = np.array([complex(pt[0][0], pt[0][1]) for pt in contour], dtype=complex)
+    
+    # Perform the Fourier Transform
+    fourier_coefficients = np.fft.fft(contour_complex)
+    
+    # Keep the first 'num_coefficients' coefficients (including the zero frequency term)
+    fourier_coefficients = fourier_coefficients[:num_coefficients]
+    
+    # Normalize the descriptors to avoid scale issues
+    fourier_coefficients = np.abs(fourier_coefficients)  # Magnitude of Fourier coefficients
+    fourier_coefficients /= np.linalg.norm(fourier_coefficients, ord=1)  # Normalize
+    
+    return fourier_coefficients
+
+
+def get_features(good_images, bad_images, ugly_images):
+    all_images = [good_images, bad_images, ugly_images]
+    all_features = []
+
+    for j, images in enumerate(all_images):
+        image_features = []
+
+        for i, img in enumerate(images):
+            hsv_image = cv.cvtColor(img, cv.COLOR_BGR2HSV)  # Convert to HSV
+
+            # Color features
+            red_proportion = calculate_red_proportion(hsv_image)
+            white_proportion = calculate_white_proportion(hsv_image)
+            green_proportion = calculate_green_proportion(hsv_image)
+            yellow_proportion = calculate_yellow_proportion(hsv_image)
+            black_proportion = calculate_black_gray_proportion(hsv_image)
+
+            # Shape & Edge features
+            area, perimeter = calculate_area_perimeter(img)
+            circularity = calculate_circularity(area, perimeter)
+            edge_intensity = calculate_edge_intensity(img)
+
+            # Texture features (LBP)
+            lbp_features = compute_lbp(hsv_image[:, :, 2])
+
+            # Fourier Descriptor features
+            fourier_features = calculate_fourier_descriptors(img)
+
+            # Combine all features
+            color_features = [red_proportion, white_proportion, green_proportion, yellow_proportion, black_proportion]
+            shape_features = [area, perimeter, circularity, edge_intensity]
+            features = np.concatenate((color_features, lbp_features, shape_features, fourier_features), axis=0)
+
+            image_features.append(features)
+
+        image_features = np.array(image_features)
+        all_features.append(image_features)
+        print("Finished loading dataset", j+1)
+
+    return all_features
