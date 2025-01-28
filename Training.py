@@ -1,6 +1,7 @@
 import cv2 as cv
 import numpy as np
 import os
+from skimage.feature import local_binary_pattern
 
 def load_images_from_folder(folder_path):
     images = []  # List to store loaded images
@@ -121,7 +122,7 @@ def calculate_black_gray_proportion(image, lower_gray=(0, 0, 50), upper_gray=(18
         float: The proportion of black and gray pixels in the image.
     """
     gray_mask = cv.inRange(image, lower_gray, upper_gray)  # Create a binary mask for gray pixels
-    black_mask = cv.inRange(hsv_image, lower_black, upper_black)  # Create a binary mask for black pixels
+    black_mask = cv.inRange(image, lower_black, upper_black)  # Create a binary mask for black pixels
     
     gray_pixel_count = cv.countNonZero(gray_mask)  # Calculate the number of gray pixels
     black_pixel_count = cv.countNonZero(black_mask)  # Calculate the number of black pixels
@@ -130,33 +131,68 @@ def calculate_black_gray_proportion(image, lower_gray=(0, 0, 50), upper_gray=(18
     black_gray_proportion = (gray_pixel_count + black_pixel_count) / total_pixels  # Calculate the proportion of black and gray pixels
     return black_gray_proportion
 
+def compute_lbp(arr):
+    """Find LBP of all pixels.
+    Also perform Vectorization/Normalization to get feature vector.
+    """
+    # LBP function params
+    radius = 3
+    n_points = 8 * radius
+    METHOD = 'uniform'
+    n_bins = n_points + 2
+    
+    lbp = local_binary_pattern(arr, n_points, radius, METHOD)
+    lbp = lbp.ravel()
+    # feature_len = int(lbp.max() + 1)
+    feature = np.zeros(n_bins)
+    for i in lbp:
+        feature[int(i)] += 1
+    feature /= np.linalg.norm(feature, ord=1)
+    return feature
 
+def get_features(good_images, bad_images, ugly_images):
+    all_images = [good_images, bad_images, ugly_images]
+    all_features = []
+    for j, images in enumerate(all_images):
+        image_features = []
+        for i, img in enumerate(images):
+            # Combine masks for both red ranges
+            hsv_image = cv.cvtColor(img, cv.COLOR_BGR2HSV)  # Convert BGR image to HSV color space
+            
+            # Color features
+            red_proportion = calculate_red_proportion(hsv_image)
+            white_proportion = calculate_white_proportion(hsv_image)
+            green_proportion = calculate_green_proportion(hsv_image)
+            yellow_proportion = calculate_yellow_proportion(hsv_image)
+            black_proportion = calculate_black_gray_proportion(hsv_image)
+            
+            # Non-color features
+            lbp_features = compute_lbp(hsv_image[:, :, 2])
+            
+            # Store it
+            color_features = [red_proportion, white_proportion, green_proportion, yellow_proportion, black_proportion]
+            features = np.concatenate((color_features, lbp_features), axis=0)
+            image_features.append(features)
+            # Print out
+            # print(f"Image {i+1}: Red proportion = {red_proportion:.2%}, White proportion = {white_proportion:.2%}, Green proportion = {green_proportion:.2%}, Yellow proportion = {yellow_proportion:.2%}, Black proportion = {black_proportion:.2%}")
+            # print(f"lbp features: {lbp_features}")
 
+        image_features = np.array(image_features)
+        all_features.append(image_features)
+        
+        print("Finished loading in for dataset", j+1)
+    
+    return all_features
 
 # Load in the images
 good_images, good_files = load_images_from_folder("contours/Good1_Slow")
 bad_images, bad_files = load_images_from_folder("contours/Bad_Slow")
-# ugly_images, ugly_files = load_images_from_folder("contours/Ugly_Slow")
+ugly_images, ugly_files = load_images_from_folder("contours/Ugly_Slow")
 
-good_features, bad_features, ugly_features = [], [], []
+# Get the features
+all_features = get_features(good_images, bad_images, ugly_images)
+good_features, bad_features, ugly_features = all_features
 
-print(type(good_images[0]))
-
-
-print(calculate_red_proportion(good_images[0]))
-
-# Process each image
-for i, img in enumerate(good_images):
-    # Combine masks for both red ranges
-    hsv_image = cv.cvtColor(img, cv.COLOR_BGR2HSV)  # Convert BGR image to HSV color space
-    red_proportion = calculate_red_proportion(hsv_image)
-    white_proportion = calculate_white_proportion(hsv_image)
-    green_proportion = calculate_green_proportion(hsv_image)
-    yellow_proportion = calculate_yellow_proportion(hsv_image)
-    black_proportion = calculate_black_gray_proportion(hsv_image)
-    print(f"Image {i+1}: Red proportion = {red_proportion:.2%}, White proportion = {white_proportion:.2%}, Green proportion = {green_proportion:.2%}, Yellow proportion = {yellow_proportion:.2%}, Black proportion = {black_proportion:.2%}")
-
-
-cv.imshow("Sample Image", good_images[-1])  # Display the first image
+cv.imshow("Sample Image", ugly_images[-1])  # Display the last image
 cv.waitKey(0)  # Wait for a key press to close the window
 cv.destroyAllWindows()
