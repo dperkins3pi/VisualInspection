@@ -3,6 +3,10 @@ import numpy as np
 import os
 from skimage.feature import local_binary_pattern
 
+GOOD = 0
+BAD = 1
+UGLY = 2
+
 def load_images_from_folder(folder_path):
     images = []  # List to store loaded images
     file_names = []
@@ -184,6 +188,47 @@ def get_features(good_images, bad_images, ugly_images):
     
     return all_features
 
+
+def shuffle_and_split(good_features, good_files, bad_features, bad_files, ugly_features, ugly_files, test_size=0.2, random_seed=42):
+    """
+    Shuffle the data and split into training and test sets.
+    
+    Returns:
+        tuple: (X_train, X_test, y_train, y_test, train_files, test_files)
+            - X_train: Training feature vectors
+            - X_test: Testing feature vectors
+            - y_train: Training labels (if applicable)
+            - y_test: Testing labels (if applicable)
+            - train_files: Corresponding file names for training set
+            - test_files: Corresponding file names for testing set
+    """
+    # Store all into one
+    features = np.concatenate([good_features, bad_features, ugly_features])
+    file_names = np.concatenate([good_files, bad_files, ugly_files])
+    labels = np.concatenate([[GOOD]*len(good_features), [BAD]*len(bad_features), [UGLY]*len(ugly_features)])
+    
+    print(len(features))
+    np.random.seed(random_seed)   # Set the random seed for reproducibility
+
+    # Shuffle the indices
+    indices = np.arange(len(features))
+    np.random.shuffle(indices)
+    
+    # Split the indices into training and test sets
+    test_size_int = int(len(features) * test_size)
+    train_indices = indices[:-test_size_int]
+    test_indices = indices[-test_size_int:]
+    
+    # Split the data into features and filenames
+    X_train = features[train_indices]
+    X_test = features[test_indices]
+    train_labels = labels[train_indices]
+    test_labels = labels[test_indices]
+    train_files = [file_names[i] for i in train_indices]
+    test_files = [file_names[i] for i in test_indices]
+    
+    return X_train, X_test, train_labels, test_labels, train_files, test_files
+
 # Load in the images
 good_images, good_files = load_images_from_folder("contours/Good1_Slow")
 bad_images, bad_files = load_images_from_folder("contours/Bad_Slow")
@@ -192,6 +237,10 @@ ugly_images, ugly_files = load_images_from_folder("contours/Ugly_Slow")
 # Get the features
 all_features = get_features(good_images, bad_images, ugly_images)
 good_features, bad_features, ugly_features = all_features
+
+# Split into training and test set
+train_data, test_data, train_labels, test_labels, train_files, test_files = \
+    shuffle_and_split(good_features, good_files, bad_features, bad_files, ugly_features, ugly_files)
 
 cv.imshow("Sample Image", ugly_images[-1])  # Display the last image
 cv.waitKey(0)  # Wait for a key press to close the window
