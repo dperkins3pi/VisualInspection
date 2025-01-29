@@ -1,6 +1,5 @@
 """
-ECEn-631 Visual Inspection Project created by Harrison Garrett in 2020
-
+ECEn-631 Visual Inspection Project
 """
 
 import cv2 as cv
@@ -122,12 +121,5 @@ while True:
 
 camera.release()
     
-# # ssh dbp52@ssh.et.byu.edu:~/VisualInspection/Video.avi
-# # source ecen_venv/bin/activate
-
-# # Features to Use
-#     # Color
-#     # LBP
-#     # Size/Area
-#     # Shape somehow
-#
+# ssh dbp52@ssh.et.byu.edu:~/VisualInspection/Video.avi
+# source ecen_venv/bin/activate
