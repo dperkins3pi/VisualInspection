@@ -383,34 +383,36 @@ def vis_conf_mat(conf_mat, cat_names, acc):
     _filename = 'conf_mat.png'
     plt.savefig(_filename, bbox_inches='tight')
 
+if __name__=="__main__":
+    # Load in the images
+    good_images, good_files = load_images_from_folder("contours/Good1_Slow")
+    bad_images, bad_files = load_images_from_folder("contours/Bad_Slow")
+    ugly_images, ugly_files = load_images_from_folder("contours/Ugly_Slow")
 
-# Load in the images
-good_images, good_files = load_images_from_folder("contours/Good1_Slow")
-bad_images, bad_files = load_images_from_folder("contours/Bad_Slow")
-ugly_images, ugly_files = load_images_from_folder("contours/Ugly_Slow")
+    # Get the features
+    all_features = get_all_features(good_images, bad_images, ugly_images)
+    good_features, bad_features, ugly_features = all_features
 
-# Get the features
-all_features = get_all_features(good_images, bad_images, ugly_images)
-good_features, bad_features, ugly_features = all_features
+    # Split into training and test set
+    train_data, test_data, train_labels, test_labels, train_files, test_files = \
+        shuffle_and_split(good_features, good_files, bad_features, bad_files, ugly_features, ugly_files)
+        
+    print("Start the training")
+    clf = LinearSVC(random_state=0, tol=1e-5)
+    clf.fit(train_data, train_labels)            # fit SVM using training data
+    prediction = clf.predict(test_data)          # make prediction on the test data
 
-# Split into training and test set
-train_data, test_data, train_labels, test_labels, train_files, test_files = \
-    shuffle_and_split(good_features, good_files, bad_features, bad_files, ugly_features, ugly_files)
-    
-clf = LinearSVC(random_state=0, tol=1e-5)
-clf.fit(train_data, train_labels)            # fit SVM using training data
-prediction = clf.predict(test_data)          # make prediction on the test data
+    # Save weights to a .npy file (using numpy)
+    weights = clf.coef_
+    intercept = clf.intercept_
+    classes = clf.classes_
+    np.savez('svc_model.npz', coef=weights, intercept=intercept, classes=classes)
 
-# Save weights to a .npy file (using numpy)
-weights = clf.coef_
-intercept = clf.intercept_
-np.savez('svc_model.npz', coef=weights, intercept=intercept)
+    # visualization
+    cmat = get_conf_mat(y_pred=prediction, y_target=test_labels, n_cats=3)
+    acc = cmat.trace() / cmat.shape[0]
+    vis_conf_mat(cmat, ["Good", "Bad", "Ugly"], acc)
 
-# visualization
-cmat = get_conf_mat(y_pred=prediction, y_target=test_labels, n_cats=3)
-acc = cmat.trace() / cmat.shape[0]
-vis_conf_mat(cmat, ["Good", "Bad", "Ugly"], acc)
-
-# cv.imshow("Sample Image", ugly_images[-1])  # Display the last image
-# cv.waitKey(0)  # Wait for a key press to close the window
-# cv.destroyAllWindows()
+    # cv.imshow("Sample Image", ugly_images[-1])  # Display the last image
+    # cv.waitKey(0)  # Wait for a key press to close the window
+    # cv.destroyAllWindows()
